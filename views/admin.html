@@ -48,16 +48,45 @@
     }
 
     async function loadLinks() {
-      const res = await fetch('/api/links');
-      const links = await res.json();
-      tbody.innerHTML = links.map(l => `
-        <tr>
-          <td><a href="/${l.key}" target="_blank">/${l.key}</a></td>
-          <td><a href="${l.url}" target="_blank">${l.url}</a></td>
-          <td>${new Date(l.created_at * 1000).toLocaleString('zh-CN')}</td>
-          <td><button class="btn-del" onclick="deleteLink('${l.key}')">删除</button></td>
-        </tr>
-      `).join('');
+      try {
+        const res = await fetch('/api/links');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const links = await res.json();
+        tbody.innerHTML = '';
+        links.forEach(l => {
+          const tr = document.createElement('tr');
+
+          const keyTd = document.createElement('td');
+          const keyA = document.createElement('a');
+          keyA.href = '/' + l.key;
+          keyA.target = '_blank';
+          keyA.textContent = '/' + l.key;
+          keyTd.appendChild(keyA);
+
+          const urlTd = document.createElement('td');
+          const urlA = document.createElement('a');
+          const safeUrl = /^https?:\/\//i.test(l.url) ? l.url : '#';
+          urlA.href = safeUrl;
+          urlA.target = '_blank';
+          urlA.textContent = l.url;
+          urlTd.appendChild(urlA);
+
+          const timeTd = document.createElement('td');
+          timeTd.textContent = new Date(l.created_at * 1000).toLocaleString('zh-CN');
+
+          const actionTd = document.createElement('td');
+          const delBtn = document.createElement('button');
+          delBtn.className = 'btn-del';
+          delBtn.textContent = '删除';
+          delBtn.addEventListener('click', () => deleteLink(l.key));
+          actionTd.appendChild(delBtn);
+
+          tr.append(keyTd, urlTd, timeTd, actionTd);
+          tbody.appendChild(tr);
+        });
+      } catch (e) {
+        showMsg('加载失败: ' + e.message, true);
+      }
     }
 
     async function addLink() {
@@ -74,14 +103,18 @@
       document.querySelector('input[name=key]').value = '';
       document.querySelector('input[name=url]').value = '';
       showMsg(`已添加 /${key}`, false);
-      loadLinks();
+      await loadLinks();
     }
 
     async function deleteLink(key) {
       if (!confirm(`确认删除 /${key}？`)) return;
-      await fetch(`/api/links/${key}`, { method: 'DELETE' });
+      const res = await fetch(`/api/links/${encodeURIComponent(key)}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        return showMsg(data.error || '删除失败', true);
+      }
       showMsg(`已删除 /${key}`, false);
-      loadLinks();
+      await loadLinks();
     }
 
     loadLinks();
