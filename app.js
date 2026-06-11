@@ -25,6 +25,14 @@ app.post('/api/links', (req, res) => {
     return res.status(400).json({ error: 'key must contain only letters, numbers, hyphens, and underscores' });
   }
   try {
+    const parsed = new URL(url);
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return res.status(400).json({ error: 'url must be an http or https URL' });
+    }
+  } catch {
+    return res.status(400).json({ error: 'url must be a valid URL' });
+  }
+  try {
     addLink(key, url);
     res.status(201).json({ key, url });
   } catch (err) {
@@ -46,6 +54,14 @@ app.delete('/api/links/:key', (req, res) => {
 app.get('/:key', (req, res) => {
   const row = getLink(req.params.key);
   if (!row) return res.status(404).send('Not found');
+  try {
+    const parsed = new URL(row.url);
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return res.status(400).send('Invalid redirect target');
+    }
+  } catch {
+    return res.status(400).send('Invalid redirect target');
+  }
   res.redirect(302, row.url);
 });
 
