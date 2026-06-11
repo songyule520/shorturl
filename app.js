@@ -21,6 +21,9 @@ app.post('/api/links', (req, res) => {
   if (!key || !url) {
     return res.status(400).json({ error: 'key and url are required' });
   }
+  if (!/^[A-Za-z0-9_-]+$/.test(key)) {
+    return res.status(400).json({ error: 'key must contain only letters, numbers, hyphens, and underscores' });
+  }
   try {
     addLink(key, url);
     res.status(201).json({ key, url });
@@ -34,7 +37,8 @@ app.post('/api/links', (req, res) => {
 
 // API: delete a link
 app.delete('/api/links/:key', (req, res) => {
-  deleteLink(req.params.key);
+  const result = deleteLink(req.params.key);
+  if (result.changes === 0) return res.status(404).json({ error: 'Key not found' });
   res.status(204).end();
 });
 
