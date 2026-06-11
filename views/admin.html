@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>短链管理</title>
+  <style>
+    body { font-family: sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; }
+    h1 { font-size: 1.4rem; margin-bottom: 24px; }
+    .form-row { display: flex; gap: 8px; margin-bottom: 24px; }
+    .form-row input { padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; }
+    .form-row input[name="key"] { width: 120px; }
+    .form-row input[name="url"] { flex: 1; }
+    button { padding: 6px 14px; border: none; border-radius: 4px; cursor: pointer; }
+    .btn-add { background: #2563eb; color: #fff; }
+    .btn-del { background: #ef4444; color: #fff; font-size: 0.85rem; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #e5e7eb; }
+    th { background: #f9fafb; font-size: 0.85rem; color: #6b7280; }
+    #msg { margin-bottom: 12px; font-size: 0.9rem; }
+    .err { color: #ef4444; }
+    .ok  { color: #16a34a; }
+  </style>
+</head>
+<body>
+  <h1>短链管理</h1>
+  <div id="msg"></div>
+  <div class="form-row">
+    <input name="key" placeholder="短码，如 1 或 abc" />
+    <input name="url" placeholder="目标 URL，如 https://www.baidu.com" />
+    <button class="btn-add" onclick="addLink()">添加</button>
+  </div>
+  <table>
+    <thead>
+      <tr><th>短码</th><th>目标 URL</th><th>创建时间</th><th></th></tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+
+  <script>
+    const msg = document.getElementById('msg');
+    const tbody = document.getElementById('tbody');
+
+    function showMsg(text, isErr) {
+      msg.textContent = text;
+      msg.className = isErr ? 'err' : 'ok';
+      setTimeout(() => { msg.textContent = ''; }, 3000);
+    }
+
+    async function loadLinks() {
+      const res = await fetch('/api/links');
+      const links = await res.json();
+      tbody.innerHTML = links.map(l => `
+        <tr>
+          <td><a href="/${l.key}" target="_blank">/${l.key}</a></td>
+          <td><a href="${l.url}" target="_blank">${l.url}</a></td>
+          <td>${new Date(l.created_at * 1000).toLocaleString('zh-CN')}</td>
+          <td><button class="btn-del" onclick="deleteLink('${l.key}')">删除</button></td>
+        </tr>
+      `).join('');
+    }
+
+    async function addLink() {
+      const key = document.querySelector('input[name=key]').value.trim();
+      const url = document.querySelector('input[name=url]').value.trim();
+      if (!key || !url) return showMsg('请填写短码和目标 URL', true);
+      const res = await fetch('/api/links', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key, url })
+      });
+      const data = await res.json();
+      if (!res.ok) return showMsg(data.error, true);
+      document.querySelector('input[name=key]').value = '';
+      document.querySelector('input[name=url]').value = '';
+      showMsg(`已添加 /${key}`, false);
+      loadLinks();
+    }
+
+    async function deleteLink(key) {
+      if (!confirm(`确认删除 /${key}？`)) return;
+      await fetch(`/api/links/${key}`, { method: 'DELETE' });
+      showMsg(`已删除 /${key}`, false);
+      loadLinks();
+    }
+
+    loadLinks();
+  </script>
+</body>
+</html>
