@@ -2,9 +2,9 @@
   "name": "shorturl",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
-  "directories": {
-    "doc": "docs"
+  "main": "app.js",
+  "engines": {
+    "node": ">=20"
   },
   "scripts": {
     "start": "node app.js"
