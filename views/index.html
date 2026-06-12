@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>链接导航</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 48px 20px 64px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      color: #fff;
+    }
+
+    .avatar {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #e96c6c, #a855f7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+      margin-bottom: 16px;
+      box-shadow: 0 0 32px rgba(168,85,247,0.4);
+    }
+
+    .title {
+      font-size: 1.3rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      margin-bottom: 6px;
+    }
+
+    .subtitle {
+      font-size: 0.9rem;
+      color: rgba(255,255,255,0.5);
+      margin-bottom: 40px;
+    }
+
+    .links {
+      width: 100%;
+      max-width: 480px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .link-btn {
+      display: block;
+      width: 100%;
+      padding: 15px 24px;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 12px;
+      color: #fff;
+      font-size: 0.95rem;
+      font-weight: 500;
+      text-align: center;
+      text-decoration: none;
+      backdrop-filter: blur(10px);
+      transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+      cursor: pointer;
+    }
+
+    .link-btn:hover {
+      background: rgba(255,255,255,0.14);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    }
+
+    .link-btn:active {
+      transform: translateY(0);
+    }
+
+    .empty {
+      color: rgba(255,255,255,0.3);
+      font-size: 0.9rem;
+      margin-top: 20px;
+    }
+
+    .footer {
+      margin-top: 48px;
+      font-size: 0.75rem;
+      color: rgba(255,255,255,0.2);
+    }
+  </style>
+</head>
+<body>
+  <div class="avatar">🔗</div>
+  <div class="title">链接导航</div>
+  <div class="subtitle">点击下方按钮快速跳转</div>
+  <div class="links" id="links"></div>
+  <div class="footer">Powered by shorturl</div>
+
+  <script>
+    async function load() {
+      const res = await fetch('/links');
+      const list = await res.json();
+      const container = document.getElementById('links');
+      if (!list.length) {
+        container.innerHTML = '<div class="empty">暂无链接</div>';
+        return;
+      }
+      list.forEach(l => {
+        const a = document.createElement('a');
+        a.className = 'link-btn';
+        a.href = '/' + l.key;
+        a.textContent = l.name || l.key;
+        container.appendChild(a);
+      });
+    }
+    load();
+  </script>
+</body>
+</html>
