@@ -5,48 +5,113 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>短链管理</title>
   <style>
-    body { font-family: sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; }
-    h1 { font-size: 1.4rem; margin-bottom: 24px; }
-    .form-row { display: flex; gap: 8px; margin-bottom: 24px; }
-    .form-row input { padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; }
-    .form-row input[name="key"] { width: 110px; }
+    *, *::before, *::after { box-sizing: border-box; }
+    body { font-family: sans-serif; max-width: 960px; margin: 40px auto; padding: 0 20px; color: #111; }
+    h1 { font-size: 1.4rem; margin-bottom: 4px; }
+    .nav { margin-bottom: 24px; font-size: 0.85rem; color: #6b7280; }
+    .nav a { color: #2563eb; text-decoration: none; }
+
+    /* 分类管理区 */
+    .section-title { font-size: 1rem; font-weight: 600; margin: 0 0 10px; }
+    .cat-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+    .cat-tag {
+      display: flex; align-items: center; gap: 4px;
+      padding: 4px 10px; border-radius: 20px;
+      background: #f3f4f6; border: 1px solid #e5e7eb;
+      font-size: 0.85rem;
+    }
+    .cat-tag button { background: none; border: none; cursor: pointer; color: #9ca3af; font-size: 0.8rem; padding: 0 2px; }
+    .cat-tag button:hover { color: #ef4444; }
+    .cat-add-row { display: flex; gap: 8px; margin-bottom: 24px; }
+    .cat-add-row input { padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; width: 180px; }
+
+    /* 链接表单 */
+    .form-row { display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; }
+    .form-row input, .form-row select {
+      padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px;
+    }
+    .form-row input[name="key"]  { width: 110px; }
     .form-row input[name="name"] { width: 130px; }
-    .form-row input[name="url"] { flex: 1; }
+    .form-row select             { width: 130px; }
+    .form-row input[name="url"]  { flex: 1; min-width: 200px; }
+
     button { padding: 6px 14px; border: none; border-radius: 4px; cursor: pointer; white-space: nowrap; }
-    .btn-add  { background: #2563eb; color: #fff; }
-    .btn-edit { background: #f59e0b; color: #fff; font-size: 0.85rem; }
-    .btn-save { background: #16a34a; color: #fff; font-size: 0.85rem; }
-    .btn-cancel { background: #e5e7eb; color: #374151; font-size: 0.85rem; }
-    .btn-del  { background: #ef4444; color: #fff; font-size: 0.85rem; }
+    .btn-primary  { background: #2563eb; color: #fff; }
+    .btn-edit     { background: #f59e0b; color: #fff; font-size: 0.85rem; }
+    .btn-save     { background: #16a34a; color: #fff; font-size: 0.85rem; }
+    .btn-cancel   { background: #e5e7eb; color: #374151; font-size: 0.85rem; }
+    .btn-del      { background: #ef4444; color: #fff; font-size: 0.85rem; }
     .action-group { display: flex; gap: 4px; }
+
+    /* 表格 */
     table { width: 100%; border-collapse: collapse; }
-    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #e5e7eb; }
+    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #e5e7eb; vertical-align: middle; }
     th { background: #f9fafb; font-size: 0.85rem; color: #6b7280; }
-    td input { padding: 4px 8px; border: 1px solid #93c5fd; border-radius: 4px; width: 100%; box-sizing: border-box; font-size: 0.9rem; }
+    td input, td select {
+      padding: 4px 8px; border: 1px solid #93c5fd; border-radius: 4px;
+      width: 100%; font-size: 0.9rem;
+    }
+    .tag {
+      display: inline-block; padding: 2px 8px; border-radius: 10px;
+      background: #ede9fe; color: #7c3aed; font-size: 0.78rem;
+    }
+
+    /* 分页 */
+    .pagination { display: flex; align-items: center; gap: 6px; margin-top: 16px; font-size: 0.9rem; }
+    .pagination button { padding: 4px 10px; }
+    .pagination button:disabled { opacity: 0.4; cursor: default; }
+    .page-info { color: #6b7280; }
+
     #msg { margin-bottom: 12px; font-size: 0.9rem; }
     .err { color: #ef4444; }
     .ok  { color: #16a34a; }
+
+    hr { border: none; border-top: 1px solid #e5e7eb; margin: 20px 0; }
   </style>
 </head>
 <body>
   <h1>短链管理</h1>
+  <div class="nav"><a href="/">← 查看展示页</a></div>
   <div id="msg"></div>
-  <div class="form-row">
-    <input name="key" placeholder="短码（不含/），如 1 或 abc" />
-    <input name="name" placeholder="显示名称，如 百度" />
-    <input name="url" placeholder="目标 URL，如 https://www.baidu.com" />
-    <button class="btn-add" onclick="addLink()">添加</button>
+
+  <!-- 分类管理 -->
+  <div class="section-title">分类管理</div>
+  <div class="cat-list" id="cat-list"></div>
+  <div class="cat-add-row">
+    <input id="cat-input" placeholder="新分类名称" />
+    <button class="btn-primary" onclick="addCategory()">添加分类</button>
   </div>
+
+  <hr>
+
+  <!-- 添加链接 -->
+  <div class="section-title">添加短链</div>
+  <div class="form-row">
+    <input name="key"  placeholder="短码（不含/）" />
+    <input name="name" placeholder="显示名称" />
+    <select name="category_id" id="cat-select"><option value="">无分类</option></select>
+    <input name="url"  placeholder="目标 URL，如 https://..." />
+    <button class="btn-primary" onclick="addLink()">添加</button>
+  </div>
+
+  <hr>
+
+  <!-- 链接列表 -->
+  <div class="section-title">短链列表</div>
   <table>
     <thead>
-      <tr><th>短码</th><th>显示名称</th><th>目标 URL</th><th>创建时间</th><th></th></tr>
+      <tr><th>短码</th><th>显示名称</th><th>分类</th><th>目标 URL</th><th>创建时间</th><th></th></tr>
     </thead>
     <tbody id="tbody"></tbody>
   </table>
+  <div class="pagination" id="pagination"></div>
 
   <script>
     const msg = document.getElementById('msg');
     const tbody = document.getElementById('tbody');
+    let currentPage = 1;
+    let totalPages  = 1;
+    let categories  = [];
 
     function showMsg(text, isErr) {
       msg.textContent = text;
@@ -54,134 +119,233 @@
       setTimeout(() => { msg.textContent = ''; }, 3000);
     }
 
+    // ── 分类 ──────────────────────────────────────────────────
+    async function loadCategories() {
+      const res = await fetch('/categories');
+      categories = await res.json();
+      renderCatList();
+      renderCatSelect();
+    }
+
+    function renderCatList() {
+      const el = document.getElementById('cat-list');
+      el.innerHTML = '';
+      if (!categories.length) {
+        el.innerHTML = '<span style="color:#9ca3af;font-size:0.85rem">暂无分类</span>';
+        return;
+      }
+      categories.forEach(c => {
+        const tag = document.createElement('div');
+        tag.className = 'cat-tag';
+        tag.innerHTML = `<span>${c.name}</span>`;
+        const del = document.createElement('button');
+        del.textContent = '×';
+        del.title = '删除分类';
+        del.addEventListener('click', () => deleteCategory(c.id, c.name));
+        tag.appendChild(del);
+        el.appendChild(tag);
+      });
+    }
+
+    function renderCatSelect(selectedId) {
+      const sel = document.getElementById('cat-select');
+      const allSelects = document.querySelectorAll('select[data-cat]');
+      [sel, ...allSelects].forEach(s => {
+        const cur = s.value;
+        s.innerHTML = '<option value="">无分类</option>';
+        categories.forEach(c => {
+          const opt = document.createElement('option');
+          opt.value = c.id;
+          opt.textContent = c.name;
+          if (String(c.id) === String(selectedId || cur)) opt.selected = true;
+          s.appendChild(opt);
+        });
+      });
+    }
+
+    async function addCategory() {
+      const name = document.getElementById('cat-input').value.trim();
+      if (!name) return showMsg('请输入分类名称', true);
+      const res = await fetch('/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      const data = await res.json();
+      if (!res.ok) return showMsg(data.error, true);
+      document.getElementById('cat-input').value = '';
+      showMsg(`已添加分类「${name}」`, false);
+      await loadCategories();
+    }
+
+    async function deleteCategory(id, name) {
+      if (!confirm(`删除分类「${name}」？该分类下的短链不会被删除，只是取消归类。`)) return;
+      await fetch(`/categories/${id}`, { method: 'DELETE' });
+      showMsg(`已删除分类「${name}」`, false);
+      await loadCategories();
+      await loadLinks(currentPage);
+    }
+
+    // ── 链接 ──────────────────────────────────────────────────
     function renderRow(l) {
       const tr = document.createElement('tr');
       tr.dataset.key = l.key;
 
-      // 短码
       const keyTd = document.createElement('td');
-      const keyA = document.createElement('a');
-      keyA.href = '/' + l.key;
-      keyA.target = '_blank';
-      keyA.textContent = '/' + l.key;
-      keyTd.appendChild(keyA);
+      const a = document.createElement('a');
+      a.href = '/' + l.key; a.target = '_blank';
+      a.textContent = '/' + l.key;
+      keyTd.appendChild(a);
 
-      // 显示名称（普通态）
       const nameTd = document.createElement('td');
       nameTd.textContent = l.name || '';
 
-      // 目标 URL（普通态）
+      const catTd = document.createElement('td');
+      if (l.category_name) {
+        const tag = document.createElement('span');
+        tag.className = 'tag';
+        tag.textContent = l.category_name;
+        catTd.appendChild(tag);
+      }
+
       const urlTd = document.createElement('td');
       const urlA = document.createElement('a');
-      const safeUrl = /^https?:\/\//i.test(l.url) ? l.url : '#';
-      urlA.href = safeUrl;
-      urlA.target = '_blank';
+      const safe = /^https?:\/\//i.test(l.url) ? l.url : '#';
+      urlA.href = safe; urlA.target = '_blank';
       urlA.textContent = l.url;
       urlTd.appendChild(urlA);
 
-      // 创建时间
       const timeTd = document.createElement('td');
       timeTd.textContent = new Date(l.created_at * 1000).toLocaleString('zh-CN');
 
-      // 操作按钮
-      const actionTd = document.createElement('td');
+      const actTd = document.createElement('td');
       const editBtn = document.createElement('button');
-      editBtn.className = 'btn-edit';
-      editBtn.textContent = '编辑';
+      editBtn.className = 'btn-edit'; editBtn.textContent = '编辑';
       editBtn.addEventListener('click', () => enterEdit(tr, l));
       const delBtn = document.createElement('button');
-      delBtn.className = 'btn-del';
-      delBtn.textContent = '删除';
+      delBtn.className = 'btn-del'; delBtn.textContent = '删除';
       delBtn.addEventListener('click', () => deleteLink(l.key));
-      const group = document.createElement('div');
-      group.className = 'action-group';
-      group.append(editBtn, delBtn);
-      actionTd.appendChild(group);
+      const g = document.createElement('div'); g.className = 'action-group';
+      g.append(editBtn, delBtn);
+      actTd.appendChild(g);
 
-      tr.append(keyTd, nameTd, urlTd, timeTd, actionTd);
+      tr.append(keyTd, nameTd, catTd, urlTd, timeTd, actTd);
       return tr;
     }
 
     function enterEdit(tr, l) {
-      // 名称变输入框
+      // 名称
       tr.cells[1].innerHTML = '';
-      const nameInput = document.createElement('input');
-      nameInput.value = l.name || '';
-      nameInput.placeholder = '显示名称';
-      tr.cells[1].appendChild(nameInput);
+      const nameIn = document.createElement('input');
+      nameIn.value = l.name || ''; nameIn.placeholder = '显示名称';
+      tr.cells[1].appendChild(nameIn);
 
-      // URL 变输入框
+      // 分类
       tr.cells[2].innerHTML = '';
-      const urlInput = document.createElement('input');
-      urlInput.value = l.url;
-      urlInput.placeholder = '目标 URL';
-      tr.cells[2].appendChild(urlInput);
+      const catSel = document.createElement('select');
+      catSel.dataset.cat = '1';
+      tr.cells[2].appendChild(catSel);
+      renderCatSelect(l.category_id);
+      // copy options into this new select
+      const main = document.getElementById('cat-select');
+      catSel.innerHTML = main.innerHTML;
+      catSel.value = l.category_id || '';
 
-      // 操作换成保存/取消
-      tr.cells[4].innerHTML = '';
+      // URL
+      tr.cells[3].innerHTML = '';
+      const urlIn = document.createElement('input');
+      urlIn.value = l.url; urlIn.placeholder = '目标 URL';
+      tr.cells[3].appendChild(urlIn);
+
+      // 按钮
+      tr.cells[5].innerHTML = '';
       const saveBtn = document.createElement('button');
-      saveBtn.className = 'btn-save';
-      saveBtn.textContent = '保存';
-      saveBtn.addEventListener('click', () => saveLink(tr, l.key, nameInput, urlInput));
+      saveBtn.className = 'btn-save'; saveBtn.textContent = '保存';
+      saveBtn.addEventListener('click', () => saveLink(tr, l.key, nameIn, urlIn, catSel));
       const cancelBtn = document.createElement('button');
-      cancelBtn.className = 'btn-cancel';
-      cancelBtn.textContent = '取消';
-      cancelBtn.addEventListener('click', () => {
-        tr.replaceWith(renderRow(l));
-      });
-      const group = document.createElement('div');
-      group.className = 'action-group';
-      group.append(saveBtn, cancelBtn);
-      tr.cells[4].appendChild(group);
-
-      nameInput.focus();
+      cancelBtn.className = 'btn-cancel'; cancelBtn.textContent = '取消';
+      cancelBtn.addEventListener('click', () => tr.replaceWith(renderRow(l)));
+      const g = document.createElement('div'); g.className = 'action-group';
+      g.append(saveBtn, cancelBtn);
+      tr.cells[5].appendChild(g);
+      nameIn.focus();
     }
 
-    async function saveLink(tr, key, nameInput, urlInput) {
-      const name = nameInput.value.trim();
-      const url = urlInput.value.trim();
+    async function saveLink(tr, key, nameIn, urlIn, catSel) {
+      const name = nameIn.value.trim();
+      const url  = urlIn.value.trim();
+      const category_id = catSel.value ? Number(catSel.value) : null;
       if (!url) return showMsg('URL 不能为空', true);
       const res = await fetch(`/links/${encodeURIComponent(key)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, url })
+        body: JSON.stringify({ name, url, category_id }),
       });
       const data = await res.json();
       if (!res.ok) return showMsg(data.error, true);
       showMsg(`已更新 /${key}`, false);
-      tr.replaceWith(renderRow({ ...data, created_at: data.created_at || Math.floor(Date.now()/1000) }));
-      await loadLinks();
+      await loadLinks(currentPage);
     }
 
-    async function loadLinks() {
-      try {
-        const res = await fetch('/links');
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const links = await res.json();
-        tbody.innerHTML = '';
-        links.forEach(l => tbody.appendChild(renderRow(l)));
-      } catch (e) {
-        showMsg('加载失败: ' + e.message, true);
+    async function loadLinks(page = 1) {
+      currentPage = page;
+      const res = await fetch(`/links?page=${page}`);
+      const data = await res.json();
+      const items = data.items || data;
+      totalPages = data.pages || 1;
+
+      tbody.innerHTML = '';
+      if (!items.length) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td colspan="6" style="color:#9ca3af;text-align:center;padding:20px">暂无数据</td>';
+        tbody.appendChild(tr);
+      } else {
+        items.forEach(l => tbody.appendChild(renderRow(l)));
       }
+      renderPagination(data.total || items.length, page);
+    }
+
+    function renderPagination(total, page) {
+      const el = document.getElementById('pagination');
+      el.innerHTML = '';
+      if (totalPages <= 1) return;
+
+      const prev = document.createElement('button');
+      prev.className = 'btn-cancel'; prev.textContent = '上一页';
+      prev.disabled = page <= 1;
+      prev.addEventListener('click', () => loadLinks(page - 1));
+
+      const info = document.createElement('span');
+      info.className = 'page-info';
+      info.textContent = `第 ${page} / ${totalPages} 页，共 ${total} 条`;
+
+      const next = document.createElement('button');
+      next.className = 'btn-cancel'; next.textContent = '下一页';
+      next.disabled = page >= totalPages;
+      next.addEventListener('click', () => loadLinks(page + 1));
+
+      el.append(prev, info, next);
     }
 
     async function addLink() {
-      const key = document.querySelector('input[name=key]').value.trim().replace(/^\/+/, '');
+      const key  = document.querySelector('input[name=key]').value.trim().replace(/^\/+/, '');
       const name = document.querySelector('input[name=name]').value.trim();
-      const url = document.querySelector('input[name=url]').value.trim();
+      const url  = document.querySelector('input[name=url]').value.trim();
+      const category_id = document.getElementById('cat-select').value
+        ? Number(document.getElementById('cat-select').value) : null;
       if (!key || !url) return showMsg('请填写短码和目标 URL', true);
       const res = await fetch('/links', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key, name, url })
+        body: JSON.stringify({ key, name, url, category_id }),
       });
       const data = await res.json();
       if (!res.ok) return showMsg(data.error, true);
-      document.querySelector('input[name=key]').value = '';
+      document.querySelector('input[name=key]').value  = '';
       document.querySelector('input[name=name]').value = '';
-      document.querySelector('input[name=url]').value = '';
+      document.querySelector('input[name=url]').value  = '';
       showMsg(`已添加 /${key}`, false);
-      await loadLinks();
+      await loadLinks(1);
     }
 
     async function deleteLink(key) {
@@ -192,10 +356,15 @@
         return showMsg(data.error || '删除失败', true);
       }
       showMsg(`已删除 /${key}`, false);
-      await loadLinks();
+      const newPage = currentPage > 1 && tbody.children.length === 1 ? currentPage - 1 : currentPage;
+      await loadLinks(newPage);
     }
 
-    loadLinks();
+    // init
+    (async () => {
+      await loadCategories();
+      await loadLinks(1);
+    })();
   </script>
 </body>
 </html>

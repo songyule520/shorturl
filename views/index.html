@@ -6,7 +6,6 @@
   <title>链接导航</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
     body {
       min-height: 100vh;
       background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
@@ -17,105 +16,144 @@
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       color: #fff;
     }
-
     .avatar {
-      width: 80px;
-      height: 80px;
-      border-radius: 50%;
+      width: 80px; height: 80px; border-radius: 50%;
       background: linear-gradient(135deg, #e96c6c, #a855f7);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 2rem;
-      margin-bottom: 16px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 2rem; margin-bottom: 16px;
       box-shadow: 0 0 32px rgba(168,85,247,0.4);
     }
+    .title   { font-size: 1.3rem; font-weight: 700; margin-bottom: 6px; }
+    .subtitle { font-size: 0.9rem; color: rgba(255,255,255,0.5); margin-bottom: 32px; }
 
-    .title {
-      font-size: 1.3rem;
-      font-weight: 700;
-      letter-spacing: 0.02em;
-      margin-bottom: 6px;
-    }
+    .wrap { width: 100%; max-width: 480px; }
 
-    .subtitle {
-      font-size: 0.9rem;
-      color: rgba(255,255,255,0.5);
-      margin-bottom: 40px;
+    /* 分类 tab 行 */
+    .tabs {
+      display: flex; flex-wrap: wrap; gap: 8px;
+      margin-bottom: 20px;
     }
+    .tab {
+      padding: 6px 16px;
+      border-radius: 20px;
+      border: 1px solid rgba(255,255,255,0.2);
+      background: rgba(255,255,255,0.07);
+      color: rgba(255,255,255,0.75);
+      font-size: 0.85rem; cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+    }
+    .tab:hover  { background: rgba(255,255,255,0.14); color: #fff; }
+    .tab.active { background: #a855f7; border-color: #a855f7; color: #fff; }
 
-    .links {
-      width: 100%;
-      max-width: 480px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
+    /* 链接区 */
+    .section { display: none; flex-direction: column; gap: 12px; }
+    .section.visible { display: flex; }
 
     .link-btn {
-      display: block;
-      width: 100%;
+      display: block; width: 100%;
       padding: 15px 24px;
       background: rgba(255,255,255,0.07);
       border: 1px solid rgba(255,255,255,0.12);
       border-radius: 12px;
-      color: #fff;
-      font-size: 0.95rem;
-      font-weight: 500;
-      text-align: center;
-      text-decoration: none;
+      color: #fff; font-size: 0.95rem; font-weight: 500;
+      text-align: center; text-decoration: none;
       backdrop-filter: blur(10px);
       transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
-      cursor: pointer;
     }
-
     .link-btn:hover {
       background: rgba(255,255,255,0.14);
       transform: translateY(-2px);
       box-shadow: 0 8px 24px rgba(0,0,0,0.3);
     }
-
-    .link-btn:active {
-      transform: translateY(0);
-    }
-
-    .empty {
-      color: rgba(255,255,255,0.3);
-      font-size: 0.9rem;
-      margin-top: 20px;
-    }
-
-    .footer {
-      margin-top: 48px;
-      font-size: 0.75rem;
-      color: rgba(255,255,255,0.2);
-    }
+    .empty { color: rgba(255,255,255,0.3); font-size: 0.9rem; text-align: center; padding: 20px 0; }
+    .footer { margin-top: 48px; font-size: 0.75rem; color: rgba(255,255,255,0.2); }
   </style>
 </head>
 <body>
   <div class="avatar">🔗</div>
   <div class="title">链接导航</div>
-  <div class="subtitle">点击下方按钮快速跳转</div>
-  <div class="links" id="links"></div>
+  <div class="subtitle">点击分类查看链接</div>
+
+  <div class="wrap">
+    <div class="tabs" id="tabs"></div>
+    <div id="sections"></div>
+  </div>
+
   <div class="footer">Powered by shorturl</div>
 
   <script>
+    let currentTab = null;
+
+    function makeBtn(l) {
+      const a = document.createElement('a');
+      a.className = 'link-btn';
+      a.href = '/' + l.key;
+      a.textContent = l.name || l.key;
+      return a;
+    }
+
+    function showSection(id) {
+      document.querySelectorAll('.section').forEach(s => s.classList.remove('visible'));
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      const sec = document.getElementById('sec-' + id);
+      const tab = document.getElementById('tab-' + id);
+      if (sec) sec.classList.add('visible');
+      if (tab) tab.classList.add('active');
+      currentTab = id;
+    }
+
     async function load() {
-      const res = await fetch('/links');
-      const list = await res.json();
-      const container = document.getElementById('links');
-      if (!list.length) {
-        container.innerHTML = '<div class="empty">暂无链接</div>';
+      const [cats, links] = await Promise.all([
+        fetch('/categories').then(r => r.json()),
+        fetch('/links').then(r => r.json()),
+      ]);
+
+      const tabsEl    = document.getElementById('tabs');
+      const sectionsEl = document.getElementById('sections');
+
+      // 按分类分组
+      const grouped = {};
+      cats.forEach(c => { grouped[c.id] = { cat: c, items: [] }; });
+      const uncategorized = [];
+      links.forEach(l => {
+        if (l.category_id && grouped[l.category_id]) {
+          grouped[l.category_id].items.push(l);
+        } else {
+          uncategorized.push(l);
+        }
+      });
+
+      // 渲染分类 tab + section
+      const allGroups = [
+        ...cats.map(c => grouped[c.id]),
+        ...(uncategorized.length ? [{ cat: { id: 'other', name: '其他' }, items: uncategorized }] : []),
+      ].filter(g => g.items.length);
+
+      if (!allGroups.length) {
+        sectionsEl.innerHTML = '<div class="empty">暂无链接</div>';
         return;
       }
-      list.forEach(l => {
-        const a = document.createElement('a');
-        a.className = 'link-btn';
-        a.href = '/' + l.key;
-        a.textContent = l.name || l.key;
-        container.appendChild(a);
+
+      allGroups.forEach((g, i) => {
+        const { cat, items } = g;
+
+        const tab = document.createElement('button');
+        tab.className = 'tab';
+        tab.id = 'tab-' + cat.id;
+        tab.textContent = cat.name;
+        tab.addEventListener('click', () => showSection(cat.id));
+        tabsEl.appendChild(tab);
+
+        const sec = document.createElement('div');
+        sec.className = 'section';
+        sec.id = 'sec-' + cat.id;
+        items.forEach(l => sec.appendChild(makeBtn(l)));
+        sectionsEl.appendChild(sec);
+
+        if (i === 0) showSection(cat.id);
       });
     }
+
     load();
   </script>
 </body>

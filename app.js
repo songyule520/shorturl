@@ -1,33 +1,65 @@
 const express = require('express');
 const path = require('path');
-const { getLink, getAllLinks, addLink, updateLink, deleteLink } = require('./db');
+const {
+  getAllCategories, addCategory, updateCategory, deleteCategory,
+  getLink, getAllLinks, getLinksPage, countLinks, addLink, updateLink, deleteLink,
+} = require('./db');
 
 const app = express();
 app.use(express.json());
 
 const router = express.Router();
 
-// Homepage — link-in-bio style display page
-router.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'index.html'));
+// Pages
+router.get('/',       (req, res) => res.sendFile(path.join(__dirname, 'views', 'index.html')));
+router.get('/manage', (req, res) => res.sendFile(path.join(__dirname, 'views', 'admin.html')));
+
+// ── Categories API ───────────────────────────────────────────
+router.get('/categories', (req, res) => {
+  res.json(getAllCategories());
 });
 
-// Admin page
-router.get('/manage', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'admin.html'));
+router.post('/categories', (req, res) => {
+  const { name, sort } = req.body;
+  if (!name) return res.status(400).json({ error: 'name is required' });
+  try {
+    const result = addCategory(name, sort || 0);
+    res.status(201).json({ id: result.lastInsertRowid, name, sort: sort || 0 });
+  } catch (err) {
+    if (err.message.includes('UNIQUE')) return res.status(409).json({ error: '分类名称已存在' });
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
-// API: list all links
+router.put('/categories/:id', (req, res) => {
+  const { name, sort } = req.body;
+  if (!name) return res.status(400).json({ error: 'name is required' });
+  const result = updateCategory(req.params.id, name, sort || 0);
+  if (result.changes === 0) return res.status(404).json({ error: 'Category not found' });
+  res.json({ id: Number(req.params.id), name, sort: sort || 0 });
+});
+
+router.delete('/categories/:id', (req, res) => {
+  const result = deleteCategory(req.params.id);
+  if (result.changes === 0) return res.status(404).json({ error: 'Category not found' });
+  res.status(204).end();
+});
+
+// ── Links API ────────────────────────────────────────────────
 router.get('/links', (req, res) => {
+  const page = parseInt(req.query.page) || 0;
+  const size = 10;
+  if (page > 0) {
+    const total = countLinks();
+    const items = getLinksPage(page, size);
+    return res.json({ items, total, page, pages: Math.ceil(total / size) });
+  }
   res.json(getAllLinks());
 });
 
-// API: add a link
 router.post('/links', (req, res) => {
-  const { key, name, url } = req.body;
-  if (!key || !url) {
-    return res.status(400).json({ error: 'key and url are required' });
-  }
+  const { key, name, url, category_id } = req.body;
+  if (!key || !url) return res.status(400).json({ error: 'key and url are required' });
   if (!/^[A-Za-z0-9_-]+$/.test(key)) {
     return res.status(400).json({ error: 'key must contain only letters, numbers, hyphens, and underscores' });
   }
@@ -40,19 +72,16 @@ router.post('/links', (req, res) => {
     return res.status(400).json({ error: 'url must be a valid URL' });
   }
   try {
-    addLink(key, name || key, url);
-    res.status(201).json({ key, name: name || key, url });
+    addLink(key, name || key, url, category_id);
+    res.status(201).json({ key, name: name || key, url, category_id: category_id || null });
   } catch (err) {
-    if (err.code === 'DUPLICATE_KEY') {
-      return res.status(409).json({ error: 'Key already exists' });
-    }
+    if (err.code === 'DUPLICATE_KEY') return res.status(409).json({ error: 'Key already exists' });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// API: update a link
 router.put('/links/:key', (req, res) => {
-  const { name, url } = req.body;
+  const { name, url, category_id } = req.body;
   if (!url) return res.status(400).json({ error: 'url is required' });
   try {
     const parsed = new URL(url);
@@ -62,13 +91,12 @@ router.put('/links/:key', (req, res) => {
   } catch {
     return res.status(400).json({ error: 'url must be a valid URL' });
   }
-  const result = updateLink(req.params.key, name || req.params.key, url);
+  const result = updateLink(req.params.key, name || req.params.key, url, category_id);
   if (result.changes === 0) return res.status(404).json({ error: 'Key not found' });
   const updated = getAllLinks().find(l => l.key === req.params.key);
   res.json(updated);
 });
 
-// API: delete a link
 router.delete('/links/:key', (req, res) => {
   const result = deleteLink(req.params.key);
   if (result.changes === 0) return res.status(404).json({ error: 'Key not found' });
