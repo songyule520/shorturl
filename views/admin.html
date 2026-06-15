@@ -77,9 +77,9 @@
     th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #e5e7eb; vertical-align: middle; font-size: 0.88rem; }
     th { background: #f9fafb; color: #6b7280; font-weight: 600; font-size: 0.82rem; }
     col.col-key    { width: 65px; }
-    col.col-name   { width: 95px; }
+    col.col-name   { width: 130px; }
     col.col-cat    { width: 115px; }
-    col.col-url    { width: auto; }
+    col.col-url    { width: 280px; }
     col.col-time   { width: 120px; }
     col.col-action { width: 120px; }
     td.url-cell { overflow: hidden; }
@@ -171,12 +171,13 @@
   <div class="page" id="page-categories">
     <div class="page-title">分类管理</div>
     <div class="card">
-      <div class="card-title">已有分类</div>
-      <div class="cat-list" id="cat-list"></div>
-      <div class="form-row">
+      <div class="card-title">添加分类</div>
+      <div class="form-row" style="margin-bottom:20px">
         <input type="text" id="cat-input" placeholder="新分类名称" style="width:200px" />
         <button class="btn-primary" onclick="addCategory()">添加分类</button>
       </div>
+      <div class="card-title">已有分类</div>
+      <div class="cat-list" id="cat-list"></div>
     </div>
   </div>
 
@@ -380,6 +381,14 @@
       tbody.appendChild(tr);
     } else {
       items.forEach(l => tbody.appendChild(renderRow(l)));
+    }
+    // 补空行保持高度固定
+    const PAGE_SIZE = 10;
+    const filled = items.length || 1;
+    for (let i = filled; i < PAGE_SIZE; i++) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td colspan="6" style="height:47px;border-bottom:1px solid #e5e7eb"></td>';
+      tbody.appendChild(tr);
     }
     renderPagination(data.total || items.length, page);
   }
