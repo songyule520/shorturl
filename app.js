@@ -1,18 +1,63 @@
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
 const {
+  getSetting, setSetting,
   getAllCategories, addCategory, updateCategory, deleteCategory,
   getLink, getAllLinks, getLinksPage, countLinks, addLink, updateLink, deleteLink,
 } = require('./db');
+
+const uploadDir = path.join(__dirname, 'public', 'uploads');
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+
+const storage = multer.diskStorage({
+  destination: uploadDir,
+  filename: (req, file, cb) => cb(null, 'avatar' + path.extname(file.originalname)),
+});
+const upload = multer({
+  storage,
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (!file.mimetype.startsWith('image/')) return cb(new Error('只能上传图片'));
+    cb(null, true);
+  },
+});
 
 const app = express();
 app.use(express.json());
 
 const router = express.Router();
 
+// Static uploads
+app.use('/public', express.static(path.join(__dirname, 'public')));
+
 // Pages
 router.get('/',       (req, res) => res.sendFile(path.join(__dirname, 'views', 'index.html')));
 router.get('/manage', (req, res) => res.sendFile(path.join(__dirname, 'views', 'admin.html')));
+
+// ── Settings API ─────────────────────────────────────────────
+router.get('/settings', (req, res) => {
+  res.json({
+    title:    getSetting('title',    '链接导航'),
+    subtitle: getSetting('subtitle', '点击分类查看链接'),
+    avatar:   getSetting('avatar',   ''),
+  });
+});
+
+router.post('/settings', (req, res) => {
+  const { title, subtitle } = req.body;
+  if (title    !== undefined) setSetting('title',    title);
+  if (subtitle !== undefined) setSetting('subtitle', subtitle);
+  res.json({ ok: true });
+});
+
+router.post('/settings/avatar', upload.single('avatar'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: '请选择图片' });
+  const url = '/public/uploads/' + req.file.filename;
+  setSetting('avatar', url);
+  res.json({ url });
+});
 
 // ── Categories API ───────────────────────────────────────────
 router.get('/categories', (req, res) => {

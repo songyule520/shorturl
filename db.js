@@ -4,6 +4,10 @@ const path = require('path');
 const db = new Database(path.join(__dirname, 'links.db'));
 
 db.exec(`
+  CREATE TABLE IF NOT EXISTS settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL DEFAULT ''
+  );
   CREATE TABLE IF NOT EXISTS categories (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     name       TEXT NOT NULL UNIQUE,
@@ -27,6 +31,16 @@ if (!linkCols.includes('name')) {
 if (!linkCols.includes('category_id')) {
   db.exec("ALTER TABLE links ADD COLUMN category_id INTEGER DEFAULT NULL REFERENCES categories(id) ON DELETE SET NULL");
 }
+
+// ── settings ─────────────────────────────────────────────────
+const stmtGetSetting = db.prepare('SELECT value FROM settings WHERE key = ?');
+const stmtSetSetting = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
+
+function getSetting(key, fallback = '')  {
+  const row = stmtGetSetting.get(key);
+  return row ? row.value : fallback;
+}
+function setSetting(key, value) { return stmtSetSetting.run(key, value); }
 
 // ── categories ──────────────────────────────────────────────
 const stmtGetAllCats  = db.prepare('SELECT * FROM categories ORDER BY sort, id');
@@ -78,6 +92,7 @@ function updateLink(key, name, url, categoryId) {
 function deleteLink(key) { return stmtDeleteLink.run(key); }
 
 module.exports = {
+  getSetting, setSetting,
   getAllCategories, addCategory, updateCategory, deleteCategory,
   getLink, getAllLinks, getLinksPage, countLinks, addLink, updateLink, deleteLink,
 };

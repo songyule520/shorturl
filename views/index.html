@@ -70,9 +70,9 @@
   </style>
 </head>
 <body>
-  <div class="avatar">🔗</div>
-  <div class="title">链接导航</div>
-  <div class="subtitle">点击分类查看链接</div>
+  <div class="avatar" id="avatar">🔗</div>
+  <div class="title" id="title">链接导航</div>
+  <div class="subtitle" id="subtitle">点击分类查看链接</div>
 
   <div class="wrap">
     <div class="tabs" id="tabs"></div>
@@ -103,10 +103,22 @@
     }
 
     async function load() {
-      const [cats, links] = await Promise.all([
+      const [cats, links, settings] = await Promise.all([
         fetch('/categories').then(r => r.json()),
         fetch('/links').then(r => r.json()),
+        fetch('/settings').then(r => r.json()),
       ]);
+
+      // apply settings
+      if (settings.title)    document.getElementById('title').textContent    = settings.title;
+      if (settings.subtitle) document.getElementById('subtitle').textContent = settings.subtitle;
+      if (settings.avatar) {
+        const av = document.getElementById('avatar');
+        av.style.backgroundImage = `url(${settings.avatar})`;
+        av.style.backgroundSize  = 'cover';
+        av.style.backgroundPosition = 'center';
+        av.textContent = '';
+      }
 
       const tabsEl    = document.getElementById('tabs');
       const sectionsEl = document.getElementById('sections');
