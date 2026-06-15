@@ -19,6 +19,7 @@ db.exec(`
     name        TEXT NOT NULL DEFAULT '',
     url         TEXT NOT NULL,
     category_id INTEGER DEFAULT NULL REFERENCES categories(id) ON DELETE SET NULL,
+    sort        INTEGER DEFAULT 0,
     created_at  INTEGER DEFAULT (strftime('%s', 'now'))
   );
 `);
@@ -30,6 +31,9 @@ if (!linkCols.includes('name')) {
 }
 if (!linkCols.includes('category_id')) {
   db.exec("ALTER TABLE links ADD COLUMN category_id INTEGER DEFAULT NULL REFERENCES categories(id) ON DELETE SET NULL");
+}
+if (!linkCols.includes('sort')) {
+  db.exec("ALTER TABLE links ADD COLUMN sort INTEGER DEFAULT 0");
 }
 
 // ── settings ─────────────────────────────────────────────────
@@ -56,12 +60,18 @@ function deleteCategory(id)           { return stmtDeleteCat.run(id); }
 // ── links ────────────────────────────────────────────────────
 const stmtGetLink    = db.prepare('SELECT url FROM links WHERE key = ?');
 const stmtGetAll     = db.prepare(`
-  SELECT l.key, l.name, l.url, l.category_id, l.created_at, c.name AS category_name
+  SELECT l.key, l.name, l.url, l.category_id, l.sort, l.created_at, c.name AS category_name
   FROM links l LEFT JOIN categories c ON l.category_id = c.id
   ORDER BY l.created_at DESC
 `);
+const stmtGetAllSorted = db.prepare(`
+  SELECT l.key, l.name, l.url, l.category_id, l.sort, l.created_at, c.name AS category_name
+  FROM links l LEFT JOIN categories c ON l.category_id = c.id
+  ORDER BY l.sort ASC, l.created_at DESC
+`);
+const stmtUpdateSort = db.prepare('UPDATE links SET sort = ? WHERE key = ?');
 const stmtGetPage    = db.prepare(`
-  SELECT l.key, l.name, l.url, l.category_id, l.created_at, c.name AS category_name
+  SELECT l.key, l.name, l.url, l.category_id, l.sort, l.created_at, c.name AS category_name
   FROM links l LEFT JOIN categories c ON l.category_id = c.id
   ORDER BY l.created_at DESC LIMIT ? OFFSET ?
 `);
@@ -70,8 +80,14 @@ const stmtAddLink    = db.prepare('INSERT INTO links (key, name, url, category_i
 const stmtUpdateLink = db.prepare('UPDATE links SET name = ?, url = ?, category_id = ? WHERE key = ?');
 const stmtDeleteLink = db.prepare('DELETE FROM links WHERE key = ?');
 
+const updateSortBatch = db.transaction((items) => {
+  items.forEach(({ key, sort }) => stmtUpdateSort.run(sort, key));
+});
+
 function getLink(key)                          { return stmtGetLink.get(key); }
 function getAllLinks()                          { return stmtGetAll.all(); }
+function getAllLinksSorted()                    { return stmtGetAllSorted.all(); }
+function updateLinkSorts(items)                { return updateSortBatch(items); }
 function getLinksPage(page, size)              { return stmtGetPage.all(size, (page - 1) * size); }
 function countLinks()                          { return stmtCountLinks.get().total; }
 function addLink(key, name, url, categoryId)   {
@@ -94,5 +110,6 @@ function deleteLink(key) { return stmtDeleteLink.run(key); }
 module.exports = {
   getSetting, setSetting,
   getAllCategories, addCategory, updateCategory, deleteCategory,
-  getLink, getAllLinks, getLinksPage, countLinks, addLink, updateLink, deleteLink,
+  getLink, getAllLinks, getAllLinksSorted, getLinksPage, countLinks,
+  addLink, updateLink, updateLinkSorts, deleteLink,
 };

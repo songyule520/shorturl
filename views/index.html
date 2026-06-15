@@ -105,7 +105,7 @@
     async function load() {
       const [cats, links, settings] = await Promise.all([
         fetch('/categories').then(r => r.json()),
-        fetch('/links').then(r => r.json()),
+        fetch('/links?sorted=1').then(r => r.json()),
         fetch('/settings').then(r => r.json()),
       ]);
 

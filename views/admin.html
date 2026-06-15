@@ -76,11 +76,12 @@
     table { width: 100%; border-collapse: collapse; table-layout: fixed; }
     th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #e5e7eb; vertical-align: middle; font-size: 0.88rem; }
     th { background: #f9fafb; color: #6b7280; font-weight: 600; font-size: 0.82rem; }
+    col.col-sort   { width: 60px; }
     col.col-key    { width: 65px; }
-    col.col-name   { width: 130px; }
-    col.col-cat    { width: 115px; }
-    col.col-url    { width: 280px; }
-    col.col-time   { width: 120px; }
+    col.col-name   { width: 120px; }
+    col.col-cat    { width: 105px; }
+    col.col-url    { width: 250px; }
+    col.col-time   { width: 110px; }
     col.col-action { width: 120px; }
     td.url-cell { overflow: hidden; }
     td.url-cell a { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -108,6 +109,15 @@
     .avatar-preview img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
     .upload-row { display: flex; align-items: center; gap: 10px; }
     input[type=file] { font-size: 0.85rem; }
+
+    .sort-input {
+      display: block; margin: 0 auto;
+      width: 52px; padding: 4px 6px; text-align: center;
+      border: 1px solid #d1d5db; border-radius: 6px;
+      font-size: 0.85rem; color: #374151; font-weight: 600;
+      outline: none; transition: border-color 0.15s;
+    }
+    .sort-input:focus { border-color: #818cf8; background: #f5f3ff; }
 
     #msg { position: fixed; top: 20px; right: 20px; padding: 10px 18px; border-radius: 8px; font-size: 0.9rem; z-index: 999; display: none; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
     #msg.ok  { background: #d1fae5; color: #065f46; display: block; }
@@ -156,10 +166,10 @@
       <table>
         <colgroup>
           <col class="col-key"><col class="col-name"><col class="col-cat">
-          <col class="col-url"><col class="col-time"><col class="col-action">
+          <col class="col-url"><col class="col-time"><col class="col-sort"><col class="col-action">
         </colgroup>
         <thead>
-          <tr><th>短码</th><th>显示名称</th><th>分类</th><th>目标 URL</th><th>创建时间</th><th></th></tr>
+          <tr><th>短码</th><th>显示名称</th><th>分类</th><th>目标 URL</th><th>创建时间</th><th style="text-align:center">排序</th><th></th></tr>
         </thead>
         <tbody id="tbody"></tbody>
       </table>
@@ -212,7 +222,7 @@
 
 <script>
   const msgEl = document.getElementById('msg');
-  let currentPage = 1, totalPages = 1, categories = [];
+  let currentPage = 1, totalPages = 1, categories = [], sortedKeys = [];
   let msgTimer = null;
 
   function showMsg(text, isErr) {
@@ -294,6 +304,26 @@
   function renderRow(l) {
     const tr = document.createElement('tr');
 
+    // 排序列
+    const sortTd = document.createElement('td');
+    sortTd.style.cssText = 'text-align:center;';
+    const sortIn = document.createElement('input');
+    sortIn.type = 'number'; sortIn.className = 'sort-input';
+    sortIn.value = l.sort || 0; sortIn.title = '数字越小越靠前，改完回车保存';
+    const saveSort = async () => {
+      const newSort = parseInt(sortIn.value) || 0;
+      if (newSort === (l.sort || 0)) return;
+      await fetch(`/links/${encodeURIComponent(l.key)}/sort`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sort: newSort }),
+      });
+      l.sort = newSort;
+      showMsg('排序已更新', false);
+    };
+    sortIn.addEventListener('change', saveSort);
+    sortIn.addEventListener('keydown', e => { if (e.key === 'Enter') { sortIn.blur(); } });
+    sortTd.appendChild(sortIn);
+
     const keyTd = document.createElement('td');
     const a = document.createElement('a'); a.href = '/' + l.key; a.target = '_blank'; a.textContent = '/' + l.key;
     keyTd.appendChild(a);
@@ -323,7 +353,7 @@
     const g = document.createElement('div'); g.className = 'action-group'; g.append(editBtn, delBtn);
     actTd.appendChild(g);
 
-    tr.append(keyTd, nameTd, catTd, urlTd, timeTd, actTd);
+    tr.append(keyTd, nameTd, catTd, urlTd, timeTd, sortTd, actTd);
     return tr;
   }
 
@@ -343,13 +373,13 @@
     const urlIn = document.createElement('input'); urlIn.type = 'url'; urlIn.value = l.url; urlIn.placeholder = '目标 URL';
     tr.cells[3].appendChild(urlIn);
 
-    tr.cells[5].innerHTML = '';
+    tr.cells[6].innerHTML = '';
     const saveBtn = document.createElement('button'); saveBtn.className = 'btn-save'; saveBtn.textContent = '保存';
     saveBtn.addEventListener('click', () => saveLink(tr, l.key, nameIn, urlIn, catSel));
     const cancelBtn = document.createElement('button'); cancelBtn.className = 'btn-cancel'; cancelBtn.textContent = '取消';
     cancelBtn.addEventListener('click', () => tr.replaceWith(renderRow(l)));
     const g = document.createElement('div'); g.className = 'action-group'; g.append(saveBtn, cancelBtn);
-    tr.cells[5].appendChild(g);
+    tr.cells[6].appendChild(g);
     nameIn.focus();
   }
 
@@ -377,7 +407,7 @@
     tbody.innerHTML = '';
     if (!items.length) {
       const tr = document.createElement('tr');
-      tr.innerHTML = '<td colspan="6" style="color:#9ca3af;text-align:center;padding:24px">暂无数据</td>';
+      tr.innerHTML = '<td colspan="7" style="color:#9ca3af;text-align:center;padding:24px">暂无数据</td>';
       tbody.appendChild(tr);
     } else {
       items.forEach(l => tbody.appendChild(renderRow(l)));
@@ -387,7 +417,7 @@
     const filled = items.length || 1;
     for (let i = filled; i < PAGE_SIZE; i++) {
       const tr = document.createElement('tr');
-      tr.innerHTML = '<td colspan="6" style="height:47px;border-bottom:1px solid #e5e7eb"></td>';
+      tr.innerHTML = '<td colspan="7" style="height:47px;border-bottom:1px solid #e5e7eb"></td>';
       tbody.appendChild(tr);
     }
     renderPagination(data.total || items.length, page);

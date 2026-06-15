@@ -5,7 +5,8 @@ const multer = require('multer');
 const {
   getSetting, setSetting,
   getAllCategories, addCategory, updateCategory, deleteCategory,
-  getLink, getAllLinks, getLinksPage, countLinks, addLink, updateLink, deleteLink,
+  getLink, getAllLinks, getAllLinksSorted, getLinksPage, countLinks,
+  addLink, updateLink, updateLinkSorts, deleteLink,
 } = require('./db');
 
 const uploadDir = path.join(__dirname, 'public', 'uploads');
@@ -17,7 +18,7 @@ const storage = multer.diskStorage({
 });
 const upload = multer({
   storage,
-  limits: { fileSize: 2 * 1024 * 1024 },
+  limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (!file.mimetype.startsWith('image/')) return cb(new Error('只能上传图片'));
     cb(null, true);
@@ -99,6 +100,8 @@ router.get('/links', (req, res) => {
     const items = getLinksPage(page, size);
     return res.json({ items, total, page, pages: Math.ceil(total / size) });
   }
+  // sorted=1 for display page, default for admin
+  if (req.query.sorted === '1') return res.json(getAllLinksSorted());
   res.json(getAllLinks());
 });
 
@@ -140,6 +143,14 @@ router.put('/links/:key', (req, res) => {
   if (result.changes === 0) return res.status(404).json({ error: 'Key not found' });
   const updated = getAllLinks().find(l => l.key === req.params.key);
   res.json(updated);
+});
+
+// API: update single link sort value
+router.patch('/links/:key/sort', (req, res) => {
+  const { sort } = req.body;
+  if (typeof sort !== 'number') return res.status(400).json({ error: 'sort must be a number' });
+  updateLinkSorts([{ key: req.params.key, sort }]);
+  res.json({ ok: true });
 });
 
 router.delete('/links/:key', (req, res) => {
