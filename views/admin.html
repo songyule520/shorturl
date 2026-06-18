@@ -119,7 +119,25 @@
     }
     .sort-input:focus { border-color: #818cf8; background: #f5f3ff; }
 
-    #msg { position: fixed; top: 20px; right: 20px; padding: 10px 18px; border-radius: 8px; font-size: 0.9rem; z-index: 999; display: none; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+    /* 弹框 */
+    .modal-mask {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.45); z-index: 1000;
+      align-items: center; justify-content: center;
+    }
+    .modal-mask.open { display: flex; }
+    .modal {
+      background: #fff; border-radius: 12px; padding: 28px 32px;
+      width: 520px; max-width: 95vw;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    }
+    .modal-title { font-size: 1.05rem; font-weight: 700; margin-bottom: 20px; color: #111; }
+    .modal-field { margin-bottom: 14px; }
+    .modal-field label { display: block; font-size: 0.82rem; color: #6b7280; margin-bottom: 5px; }
+    .modal-field input, .modal-field select { width: 100%; }
+    .modal-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+
+    #msg { position: fixed; top: 20px; right: 20px; padding: 10px 18px; border-radius: 8px; font-size: 0.9rem; z-index: 1100; display: none; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
     #msg.ok  { background: #d1fae5; color: #065f46; display: block; }
     #msg.err { background: #fee2e2; color: #991b1b; display: block; }
   </style>
@@ -152,16 +170,18 @@
 
   <!-- 短链列表 -->
   <div class="page active" id="page-links">
-    <div class="page-title">短链列表</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <div class="page-title" style="margin:0">短链列表</div>
+      <button class="btn-primary" onclick="openAddModal()">+ 新建短链</button>
+    </div>
 
-    <div class="card">
-      <div class="card-title">添加短链</div>
+    <div class="card" style="padding:16px 20px">
       <div class="form-row">
-        <input type="text" name="key"  placeholder="短码（不含/）" style="width:110px" />
-        <input type="text" name="name" placeholder="显示名称" style="width:130px" />
-        <select name="category_id" id="cat-select"><option value="">无分类</option></select>
-        <input type="url"  name="url"  placeholder="目标 URL，如 https://..." style="flex:1;min-width:200px" />
-        <button class="btn-primary" onclick="addLink()">添加</button>
+        <input type="text" id="filter-q"   placeholder="搜索短码 / 名称 / URL" style="width:220px" oninput="filterLinks()" />
+        <select id="filter-cat" onchange="filterLinks()">
+          <option value="">全部分类</option>
+        </select>
+        <button class="btn-cancel" onclick="clearFilter()">重置</button>
       </div>
     </div>
 
@@ -269,9 +289,37 @@
   </div>
 </div>
 
+<!-- 新建短链弹框 -->
+<div class="modal-mask" id="add-modal" onclick="closeAddModal(event)">
+  <div class="modal">
+    <div class="modal-title">新建短链</div>
+    <div class="modal-field">
+      <label>短码（不含 /）</label>
+      <input type="text" id="m-key" placeholder="如 1 或 abc" />
+    </div>
+    <div class="modal-field">
+      <label>显示名称</label>
+      <input type="text" id="m-name" placeholder="如 百度" />
+    </div>
+    <div class="modal-field">
+      <label>分类</label>
+      <select id="m-cat"><option value="">无分类</option></select>
+    </div>
+    <div class="modal-field">
+      <label>目标 URL</label>
+      <input type="url" id="m-url" placeholder="https://..." />
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeAddModal()">取消</button>
+      <button class="btn-primary" onclick="submitAddLink()">确认添加</button>
+    </div>
+  </div>
+</div>
+
 <script>
   const msgEl = document.getElementById('msg');
   let currentPage = 1, totalPages = 1, categories = [], sortedKeys = [];
+  let filterQ = '', filterCat = '';
   let msgTimer = null;
 
   function showMsg(text, isErr) {
@@ -316,7 +364,7 @@
   }
 
   function renderCatSelects(selectedId) {
-    document.querySelectorAll('select[data-cat], #cat-select').forEach(sel => {
+    document.querySelectorAll('select[data-cat], #cat-select, #m-cat').forEach(sel => {
       const cur = selectedId !== undefined ? selectedId : sel.value;
       sel.innerHTML = '<option value="">无分类</option>';
       categories.forEach(c => {
@@ -326,6 +374,46 @@
         sel.appendChild(opt);
       });
     });
+    // 筛选分类下拉
+    const fc = document.getElementById('filter-cat');
+    const fcVal = fc.value;
+    fc.innerHTML = '<option value="">全部分类</option>';
+    categories.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.id; opt.textContent = c.name;
+      if (String(c.id) === String(fcVal)) opt.selected = true;
+      fc.appendChild(opt);
+    });
+  }
+
+  // ── 弹框 ───────────────────────────────────────────────────
+  function openAddModal() {
+    document.getElementById('m-key').value  = '';
+    document.getElementById('m-name').value = '';
+    document.getElementById('m-url').value  = '';
+    document.getElementById('m-cat').value  = '';
+    document.getElementById('add-modal').classList.add('open');
+    document.getElementById('m-key').focus();
+  }
+  function closeAddModal(e) {
+    if (e && e.target !== document.getElementById('add-modal')) return;
+    document.getElementById('add-modal').classList.remove('open');
+  }
+  async function submitAddLink() {
+    const key  = document.getElementById('m-key').value.trim().replace(/^\/+/, '');
+    const name = document.getElementById('m-name').value.trim();
+    const url  = document.getElementById('m-url').value.trim();
+    const category_id = document.getElementById('m-cat').value ? Number(document.getElementById('m-cat').value) : null;
+    if (!key || !url) return showMsg('请填写短码和目标 URL', true);
+    const res = await fetch('/links', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key, name, url, category_id }),
+    });
+    const data = await res.json();
+    if (!res.ok) return showMsg(data.error, true);
+    document.getElementById('add-modal').classList.remove('open');
+    showMsg(`已添加 /${key}`, false);
+    await loadLinks(1);
   }
 
   async function addCategory() {
@@ -416,7 +504,7 @@
     const catSel = document.createElement('select'); catSel.dataset.cat = '1';
     tr.cells[2].appendChild(catSel);
     renderCatSelects(l.category_id);
-    catSel.innerHTML = document.getElementById('cat-select').innerHTML;
+    catSel.innerHTML = document.getElementById('m-cat').innerHTML;
     catSel.value = l.category_id || '';
 
     tr.cells[3].innerHTML = '';
@@ -447,9 +535,24 @@
     await loadLinks(currentPage);
   }
 
+  function filterLinks() {
+    filterQ   = document.getElementById('filter-q').value.trim();
+    filterCat = document.getElementById('filter-cat').value;
+    loadLinks(1);
+  }
+  function clearFilter() {
+    document.getElementById('filter-q').value = '';
+    document.getElementById('filter-cat').value = '';
+    filterQ = ''; filterCat = '';
+    loadLinks(1);
+  }
+
   async function loadLinks(page = 1) {
     currentPage = page;
-    const res = await fetch(`/links?page=${page}`);
+    const params = new URLSearchParams({ page });
+    if (filterQ)   params.set('q',   filterQ);
+    if (filterCat) params.set('cat', filterCat);
+    const res = await fetch(`/links?${params}`);
     const data = await res.json();
     const items = data.items || data;
     totalPages = data.pages || 1;
@@ -485,24 +588,6 @@
     el.append(prev, info, next);
   }
 
-  async function addLink() {
-    const key  = document.querySelector('input[name=key]').value.trim().replace(/^\/+/, '');
-    const name = document.querySelector('input[name=name]').value.trim();
-    const url  = document.querySelector('input[name=url]').value.trim();
-    const category_id = document.getElementById('cat-select').value ? Number(document.getElementById('cat-select').value) : null;
-    if (!key || !url) return showMsg('请填写短码和目标 URL', true);
-    const res = await fetch('/links', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key, name, url, category_id }),
-    });
-    const data = await res.json();
-    if (!res.ok) return showMsg(data.error, true);
-    document.querySelector('input[name=key]').value = '';
-    document.querySelector('input[name=name]').value = '';
-    document.querySelector('input[name=url]').value = '';
-    showMsg(`已添加 /${key}`, false);
-    await loadLinks(1);
-  }
 
   async function deleteLink(key) {
     if (!confirm(`确认删除 /${key}？`)) return;

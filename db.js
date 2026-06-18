@@ -123,7 +123,14 @@ const stmtGetPage    = db.prepare(`
   FROM links l LEFT JOIN categories c ON l.category_id = c.id
   ORDER BY l.created_at DESC LIMIT ? OFFSET ?
 `);
-const stmtCountLinks = db.prepare('SELECT COUNT(*) AS total FROM links');
+const stmtCountLinks       = db.prepare('SELECT COUNT(*) AS total FROM links');
+const stmtCountLinksFilter = db.prepare(`SELECT COUNT(*) AS total FROM links WHERE (key LIKE ? OR name LIKE ? OR url LIKE ?) AND (? IS NULL OR category_id = ?)`);
+const stmtGetPageFilter    = db.prepare(`
+  SELECT l.key, l.name, l.url, l.category_id, l.sort, l.created_at, c.name AS category_name
+  FROM links l LEFT JOIN categories c ON l.category_id = c.id
+  WHERE (l.key LIKE ? OR l.name LIKE ? OR l.url LIKE ?) AND (? IS NULL OR l.category_id = ?)
+  ORDER BY l.created_at DESC LIMIT ? OFFSET ?
+`);
 const stmtAddLink    = db.prepare('INSERT INTO links (key, name, url, category_id) VALUES (?, ?, ?, ?)');
 const stmtUpdateLink = db.prepare('UPDATE links SET name = ?, url = ?, category_id = ? WHERE key = ?');
 const stmtDeleteLink = db.prepare('DELETE FROM links WHERE key = ?');
@@ -136,8 +143,22 @@ function getLink(key)                          { return stmtGetLink.get(key); }
 function getAllLinks()                          { return stmtGetAll.all(); }
 function getAllLinksSorted()                    { return stmtGetAllSorted.all(); }
 function updateLinkSorts(items)                { return updateSortBatch(items); }
-function getLinksPage(page, size)              { return stmtGetPage.all(size, (page - 1) * size); }
-function countLinks()                          { return stmtCountLinks.get().total; }
+function getLinksPage(page, size, q, catId) {
+  if (q || catId) {
+    const like = `%${q || ''}%`;
+    const cat = catId || null;
+    return stmtGetPageFilter.all(like, like, like, cat, cat, size, (page - 1) * size);
+  }
+  return stmtGetPage.all(size, (page - 1) * size);
+}
+function countLinks(q, catId) {
+  if (q || catId) {
+    const like = `%${q || ''}%`;
+    const cat = catId || null;
+    return stmtCountLinksFilter.get(like, like, like, cat, cat).total;
+  }
+  return stmtCountLinks.get().total;
+}
 function addLink(key, name, url, categoryId)   {
   try {
     return stmtAddLink.run(key, name, url, categoryId || null);

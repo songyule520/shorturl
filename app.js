@@ -95,14 +95,15 @@ router.delete('/categories/:id', (req, res) => {
 
 // ── Links API ────────────────────────────────────────────────
 router.get('/links', (req, res) => {
-  const page = parseInt(req.query.page) || 0;
-  const size = 10;
+  const page  = parseInt(req.query.page) || 0;
+  const size  = 10;
+  const q     = req.query.q     || '';
+  const catId = req.query.cat   ? parseInt(req.query.cat) : null;
   if (page > 0) {
-    const total = countLinks();
-    const items = getLinksPage(page, size);
+    const total = countLinks(q, catId);
+    const items = getLinksPage(page, size, q, catId);
     return res.json({ items, total, page, pages: Math.ceil(total / size) });
   }
-  // sorted=1 for display page, default for admin
   if (req.query.sorted === '1') return res.json(getAllLinksSorted());
   res.json(getAllLinks());
 });
