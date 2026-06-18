@@ -138,6 +138,9 @@
   <div class="nav-item" onclick="switchPage('categories')" id="nav-categories">
     <span class="nav-icon">📁</span> 分类管理
   </div>
+  <div class="nav-item" onclick="switchPage('groups')" id="nav-groups">
+    <span class="nav-icon">🗂️</span> 链接组
+  </div>
   <div class="nav-item" onclick="switchPage('settings')" id="nav-settings">
     <span class="nav-icon">⚙️</span> 页面设置
   </div>
@@ -191,6 +194,52 @@
     </div>
   </div>
 
+  <!-- 链接组 -->
+  <div class="page" id="page-groups">
+    <div id="group-list-view">
+      <div class="page-title">链接组</div>
+      <div class="card">
+        <div class="card-title">新建链接组</div>
+        <div class="form-row">
+          <input type="text" id="g-key"      placeholder="短码（不含/），如 pos" style="width:120px" />
+          <input type="text" id="g-name"     placeholder="页面标题，如 收银系统" style="width:160px" />
+          <input type="text" id="g-subtitle" placeholder="副标题（可选）" style="width:200px" />
+          <button class="btn-primary" onclick="addGroup()">创建</button>
+        </div>
+      </div>
+      <div class="card" style="padding:0 0 4px">
+        <table>
+          <colgroup><col style="width:100px"><col style="width:160px"><col><col style="width:80px"><col style="width:140px"></colgroup>
+          <thead><tr><th>短码</th><th>页面标题</th><th>副标题</th><th>链接数</th><th></th></tr></thead>
+          <tbody id="group-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="group-detail-view" style="display:none">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+        <button class="btn-cancel" onclick="showGroupList()">← 返回</button>
+        <div class="page-title" id="group-detail-title" style="margin:0"></div>
+        <span id="group-detail-url" style="font-size:0.85rem;color:#6b7280"></span>
+      </div>
+      <div class="card">
+        <div class="card-title">添加链接</div>
+        <div class="form-row">
+          <input type="text" id="gl-name" placeholder="显示名称" style="width:160px" />
+          <input type="url"  id="gl-url"  placeholder="目标 URL，如 https://..." style="flex:1;min-width:200px" />
+          <button class="btn-primary" onclick="addGroupLink()">添加</button>
+        </div>
+      </div>
+      <div class="card" style="padding:0 0 4px">
+        <table>
+          <colgroup><col style="width:160px"><col><col style="width:60px"><col style="width:120px"></colgroup>
+          <thead><tr><th>显示名称</th><th>目标 URL</th><th style="text-align:center">排序</th><th></th></tr></thead>
+          <tbody id="gl-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <!-- 页面设置 -->
   <div class="page" id="page-settings">
     <div class="page-title">页面设置</div>
@@ -237,6 +286,7 @@
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     document.getElementById('page-' + name).classList.add('active');
     document.getElementById('nav-'  + name).classList.add('active');
+    if (name === 'groups') showGroupList();
   }
 
   // ── 分类 ───────────────────────────────────────────────────
@@ -461,6 +511,175 @@
     showMsg(`已删除 /${key}`, false);
     const newPage = currentPage > 1 && document.getElementById('tbody').children.length === 1 ? currentPage - 1 : currentPage;
     await loadLinks(newPage);
+  }
+
+  // ── 链接组 ─────────────────────────────────────────────────
+  let currentGroupId = null;
+
+  async function loadGroups() {
+    const groups = await fetch('/groups').then(r => r.json());
+    const tbody = document.getElementById('group-tbody');
+    tbody.innerHTML = '';
+    if (!groups.length) {
+      tbody.innerHTML = '<tr><td colspan="5" style="color:#9ca3af;text-align:center;padding:24px">暂无链接组，新建一个试试</td></tr>';
+      return;
+    }
+    for (const g of groups) {
+      const links = await fetch(`/groups/${g.id}/links`).then(r => r.json());
+      const tr = document.createElement('tr');
+
+      const keyTd = document.createElement('td');
+      const a = document.createElement('a'); a.href = '/' + g.key; a.target = '_blank'; a.textContent = '/' + g.key;
+      keyTd.appendChild(a);
+
+      const nameTd = document.createElement('td'); nameTd.textContent = g.name;
+      const subTd  = document.createElement('td'); subTd.style.cssText = 'color:#6b7280;font-size:0.85rem'; subTd.textContent = g.subtitle || '-';
+      const cntTd  = document.createElement('td'); cntTd.style.cssText = 'text-align:center'; cntTd.textContent = links.length;
+
+      const actTd = document.createElement('td');
+      const manageBtn = document.createElement('button'); manageBtn.className = 'btn-edit'; manageBtn.textContent = '管理链接';
+      manageBtn.addEventListener('click', () => showGroupDetail(g));
+      const delBtn = document.createElement('button'); delBtn.className = 'btn-del'; delBtn.textContent = '删除';
+      delBtn.addEventListener('click', () => deleteGroup(g.id, g.name));
+      const g2 = document.createElement('div'); g2.className = 'action-group'; g2.append(manageBtn, delBtn);
+      actTd.appendChild(g2);
+
+      tr.append(keyTd, nameTd, subTd, cntTd, actTd);
+      tbody.appendChild(tr);
+    }
+  }
+
+  async function addGroup() {
+    const key      = document.getElementById('g-key').value.trim().replace(/^\/+/, '');
+    const name     = document.getElementById('g-name').value.trim();
+    const subtitle = document.getElementById('g-subtitle').value.trim();
+    if (!key || !name) return showMsg('请填写短码和页面标题', true);
+    const res = await fetch('/groups', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key, name, subtitle }),
+    });
+    const data = await res.json();
+    if (!res.ok) return showMsg(data.error, true);
+    document.getElementById('g-key').value = '';
+    document.getElementById('g-name').value = '';
+    document.getElementById('g-subtitle').value = '';
+    showMsg(`已创建链接组 /${key}`, false);
+    await loadGroups();
+  }
+
+  async function deleteGroup(id, name) {
+    if (!confirm(`删除链接组「${name}」？组内所有链接也会被删除。`)) return;
+    await fetch(`/groups/${id}`, { method: 'DELETE' });
+    showMsg(`已删除 「${name}」`, false);
+    await loadGroups();
+  }
+
+  function showGroupList() {
+    document.getElementById('group-list-view').style.display = '';
+    document.getElementById('group-detail-view').style.display = 'none';
+    currentGroupId = null;
+    loadGroups();
+  }
+
+  async function showGroupDetail(g) {
+    currentGroupId = g.id;
+    document.getElementById('group-list-view').style.display = 'none';
+    document.getElementById('group-detail-view').style.display = '';
+    document.getElementById('group-detail-title').textContent = g.name;
+    document.getElementById('group-detail-url').textContent = `访问地址：/${g.key}`;
+    await loadGroupLinks();
+  }
+
+  async function loadGroupLinks() {
+    const links = await fetch(`/groups/${currentGroupId}/links`).then(r => r.json());
+    const tbody = document.getElementById('gl-tbody');
+    tbody.innerHTML = '';
+    if (!links.length) {
+      tbody.innerHTML = '<tr><td colspan="4" style="color:#9ca3af;text-align:center;padding:24px">暂无链接</td></tr>';
+      return;
+    }
+    links.forEach(l => tbody.appendChild(renderGroupLinkRow(l)));
+  }
+
+  function renderGroupLinkRow(l) {
+    const tr = document.createElement('tr');
+
+    const nameTd = document.createElement('td'); nameTd.textContent = l.name || '';
+    const urlTd  = document.createElement('td'); urlTd.className = 'url-cell';
+    const urlA   = document.createElement('a');
+    urlA.href = /^https?:\/\//i.test(l.url) ? l.url : '#'; urlA.target = '_blank';
+    urlA.textContent = l.url; urlA.title = l.url;
+    urlTd.appendChild(urlA);
+
+    const sortTd = document.createElement('td'); sortTd.style.cssText = 'text-align:center';
+    const sortIn = document.createElement('input'); sortIn.type = 'number'; sortIn.className = 'sort-input';
+    sortIn.value = l.sort || 0;
+    sortIn.addEventListener('change', async () => {
+      const s = parseInt(sortIn.value) || 0;
+      await fetch(`/groups/${currentGroupId}/links/${l.id}/sort`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sort: s }),
+      });
+      l.sort = s; showMsg('排序已更新', false);
+    });
+    sortIn.addEventListener('keydown', e => { if (e.key === 'Enter') sortIn.blur(); });
+    sortTd.appendChild(sortIn);
+
+    const actTd = document.createElement('td');
+    const editBtn = document.createElement('button'); editBtn.className = 'btn-edit'; editBtn.textContent = '编辑';
+    editBtn.addEventListener('click', () => enterGroupLinkEdit(tr, l));
+    const delBtn = document.createElement('button'); delBtn.className = 'btn-del'; delBtn.textContent = '删除';
+    delBtn.addEventListener('click', async () => {
+      if (!confirm(`确认删除「${l.name}」？`)) return;
+      await fetch(`/groups/${currentGroupId}/links/${l.id}`, { method: 'DELETE' });
+      showMsg('已删除', false); await loadGroupLinks();
+    });
+    const g = document.createElement('div'); g.className = 'action-group'; g.append(editBtn, delBtn);
+    actTd.appendChild(g);
+
+    tr.append(nameTd, urlTd, sortTd, actTd);
+    return tr;
+  }
+
+  function enterGroupLinkEdit(tr, l) {
+    tr.cells[0].innerHTML = '';
+    const nameIn = document.createElement('input'); nameIn.value = l.name || ''; nameIn.placeholder = '显示名称';
+    tr.cells[0].appendChild(nameIn);
+    tr.cells[1].innerHTML = '';
+    const urlIn = document.createElement('input'); urlIn.type = 'url'; urlIn.value = l.url;
+    tr.cells[1].appendChild(urlIn);
+    tr.cells[3].innerHTML = '';
+    const saveBtn = document.createElement('button'); saveBtn.className = 'btn-save'; saveBtn.textContent = '保存';
+    saveBtn.addEventListener('click', async () => {
+      const name = nameIn.value.trim(), url = urlIn.value.trim();
+      if (!url) return showMsg('URL 不能为空', true);
+      const res = await fetch(`/groups/${currentGroupId}/links/${l.id}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, url, sort: l.sort || 0 }),
+      });
+      if (!res.ok) { const d = await res.json(); return showMsg(d.error, true); }
+      showMsg('已更新', false); await loadGroupLinks();
+    });
+    const cancelBtn = document.createElement('button'); cancelBtn.className = 'btn-cancel'; cancelBtn.textContent = '取消';
+    cancelBtn.addEventListener('click', () => tr.replaceWith(renderGroupLinkRow(l)));
+    const g = document.createElement('div'); g.className = 'action-group'; g.append(saveBtn, cancelBtn);
+    tr.cells[3].appendChild(g);
+    nameIn.focus();
+  }
+
+  async function addGroupLink() {
+    const name = document.getElementById('gl-name').value.trim();
+    const url  = document.getElementById('gl-url').value.trim();
+    if (!url) return showMsg('请填写目标 URL', true);
+    const res = await fetch(`/groups/${currentGroupId}/links`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, url }),
+    });
+    const data = await res.json();
+    if (!res.ok) return showMsg(data.error, true);
+    document.getElementById('gl-name').value = '';
+    document.getElementById('gl-url').value  = '';
+    showMsg('已添加', false); await loadGroupLinks();
   }
 
   // ── 页面设置 ───────────────────────────────────────────────

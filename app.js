@@ -4,6 +4,8 @@ const fs = require('fs');
 const multer = require('multer');
 const {
   getSetting, setSetting,
+  getAllGroups, getGroupByKey, getGroupById, addGroup, updateGroup, deleteGroup,
+  getGroupLinks, addGroupLink, updateGroupLink, deleteGroupLink, updateGroupLinkSort,
   getAllCategories, addCategory, updateCategory, deleteCategory,
   getLink, getAllLinks, getAllLinksSorted, getLinksPage, countLinks,
   addLink, updateLink, updateLinkSorts, deleteLink,
@@ -159,18 +161,95 @@ router.delete('/links/:key', (req, res) => {
   res.status(204).end();
 });
 
+// ── Groups API ───────────────────────────────────────────────
+router.get('/groups', (req, res) => res.json(getAllGroups()));
+
+// group page data — for group.html to fetch by key
+router.get('/groups/by-key/:key', (req, res) => {
+  const group = getGroupByKey(req.params.key);
+  if (!group) return res.status(404).json({ error: 'Not found' });
+  const links = getGroupLinks(group.id);
+  res.json({ ...group, links });
+});
+
+router.post('/groups', (req, res) => {
+  const { key, name, subtitle } = req.body;
+  if (!key || !name) return res.status(400).json({ error: 'key and name are required' });
+  if (!/^[A-Za-z0-9_-]+$/.test(key)) return res.status(400).json({ error: 'key invalid' });
+  try {
+    const r = addGroup(key, name, subtitle || '');
+    res.status(201).json({ id: r.lastInsertRowid, key, name, subtitle: subtitle || '' });
+  } catch (err) {
+    if (err.code === 'DUPLICATE_KEY') return res.status(409).json({ error: 'Key already exists' });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.put('/groups/:id', (req, res) => {
+  const { key, name, subtitle } = req.body;
+  if (!key || !name) return res.status(400).json({ error: 'key and name are required' });
+  const result = updateGroup(req.params.id, key, name, subtitle || '');
+  if (result.changes === 0) return res.status(404).json({ error: 'Group not found' });
+  res.json({ id: Number(req.params.id), key, name, subtitle: subtitle || '' });
+});
+
+router.delete('/groups/:id', (req, res) => {
+  const result = deleteGroup(req.params.id);
+  if (result.changes === 0) return res.status(404).json({ error: 'Group not found' });
+  res.status(204).end();
+});
+
+router.get('/groups/:id/links', (req, res) => res.json(getGroupLinks(req.params.id)));
+
+router.post('/groups/:id/links', (req, res) => {
+  const { name, url, sort } = req.body;
+  if (!url) return res.status(400).json({ error: 'url is required' });
+  try {
+    const parsed = new URL(url);
+    if (!['http:', 'https:'].includes(parsed.protocol)) return res.status(400).json({ error: 'url must be http/https' });
+  } catch { return res.status(400).json({ error: 'url must be a valid URL' }); }
+  const r = addGroupLink(req.params.id, name || url, url, sort || 0);
+  res.status(201).json({ id: r.lastInsertRowid, group_id: Number(req.params.id), name: name || url, url, sort: sort || 0 });
+});
+
+router.put('/groups/:id/links/:lid', (req, res) => {
+  const { name, url, sort } = req.body;
+  if (!url) return res.status(400).json({ error: 'url is required' });
+  try {
+    const parsed = new URL(url);
+    if (!['http:', 'https:'].includes(parsed.protocol)) return res.status(400).json({ error: 'url must be http/https' });
+  } catch { return res.status(400).json({ error: 'url must be a valid URL' }); }
+  const result = updateGroupLink(req.params.lid, name || url, url, sort || 0);
+  if (result.changes === 0) return res.status(404).json({ error: 'Link not found' });
+  res.json({ id: Number(req.params.lid), name: name || url, url, sort: sort || 0 });
+});
+
+router.patch('/groups/:id/links/:lid/sort', (req, res) => {
+  const { sort } = req.body;
+  if (typeof sort !== 'number') return res.status(400).json({ error: 'sort must be a number' });
+  updateGroupLinkSort(req.params.lid, sort);
+  res.json({ ok: true });
+});
+
+router.delete('/groups/:id/links/:lid', (req, res) => {
+  const result = deleteGroupLink(req.params.lid);
+  if (result.changes === 0) return res.status(404).json({ error: 'Link not found' });
+  res.status(204).end();
+});
+
 // Short link redirect — catch-all, must be last
 router.get('/:key', (req, res) => {
-  const row = getLink(req.params.key);
+  const key = req.params.key;
+  // 先查链接组
+  const group = getGroupByKey(key);
+  if (group) return res.sendFile(path.join(__dirname, 'views', 'group.html'));
+  // 再查单链接
+  const row = getLink(key);
   if (!row) return res.status(404).send('Not found');
   try {
     const parsed = new URL(row.url);
-    if (!['http:', 'https:'].includes(parsed.protocol)) {
-      return res.status(400).send('Invalid redirect target');
-    }
-  } catch {
-    return res.status(400).send('Invalid redirect target');
-  }
+    if (!['http:', 'https:'].includes(parsed.protocol)) return res.status(400).send('Invalid redirect target');
+  } catch { return res.status(400).send('Invalid redirect target'); }
   res.redirect(302, row.url);
 });
 

@@ -4,6 +4,21 @@ const path = require('path');
 const db = new Database(path.join(__dirname, 'links.db'));
 
 db.exec(`
+  CREATE TABLE IF NOT EXISTS groups (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    key        TEXT NOT NULL UNIQUE,
+    name       TEXT NOT NULL DEFAULT '',
+    subtitle   TEXT NOT NULL DEFAULT '',
+    created_at INTEGER DEFAULT (strftime('%s', 'now'))
+  );
+  CREATE TABLE IF NOT EXISTS group_links (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    group_id   INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+    name       TEXT NOT NULL DEFAULT '',
+    url        TEXT NOT NULL,
+    sort       INTEGER DEFAULT 0,
+    created_at INTEGER DEFAULT (strftime('%s', 'now'))
+  );
   CREATE TABLE IF NOT EXISTS settings (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL DEFAULT ''
@@ -35,6 +50,39 @@ if (!linkCols.includes('category_id')) {
 if (!linkCols.includes('sort')) {
   db.exec("ALTER TABLE links ADD COLUMN sort INTEGER DEFAULT 0");
 }
+
+// ── groups ───────────────────────────────────────────────────
+const stmtGetAllGroups  = db.prepare('SELECT * FROM groups ORDER BY created_at DESC');
+const stmtGetGroupByKey = db.prepare('SELECT * FROM groups WHERE key = ?');
+const stmtGetGroupById  = db.prepare('SELECT * FROM groups WHERE id = ?');
+const stmtAddGroup      = db.prepare('INSERT INTO groups (key, name, subtitle) VALUES (?, ?, ?)');
+const stmtUpdateGroup   = db.prepare('UPDATE groups SET key = ?, name = ?, subtitle = ? WHERE id = ?');
+const stmtDeleteGroup   = db.prepare('DELETE FROM groups WHERE id = ?');
+
+const stmtGetGroupLinks    = db.prepare('SELECT * FROM group_links WHERE group_id = ? ORDER BY sort ASC, created_at ASC');
+const stmtAddGroupLink     = db.prepare('INSERT INTO group_links (group_id, name, url, sort) VALUES (?, ?, ?, ?)');
+const stmtUpdateGroupLink  = db.prepare('UPDATE group_links SET name = ?, url = ?, sort = ? WHERE id = ?');
+const stmtDeleteGroupLink  = db.prepare('DELETE FROM group_links WHERE id = ?');
+const stmtUpdateGroupLinkSort = db.prepare('UPDATE group_links SET sort = ? WHERE id = ?');
+
+function getAllGroups()                           { return stmtGetAllGroups.all(); }
+function getGroupByKey(key)                      { return stmtGetGroupByKey.get(key); }
+function getGroupById(id)                        { return stmtGetGroupById.get(id); }
+function addGroup(key, name, subtitle)           {
+  try { return stmtAddGroup.run(key, name, subtitle); }
+  catch (err) {
+    if (err.message.includes('UNIQUE')) { const e = new Error('Key already exists'); e.code = 'DUPLICATE_KEY'; throw e; }
+    throw err;
+  }
+}
+function updateGroup(id, key, name, subtitle)    { return stmtUpdateGroup.run(key, name, subtitle, id); }
+function deleteGroup(id)                         { return stmtDeleteGroup.run(id); }
+
+function getGroupLinks(groupId)                  { return stmtGetGroupLinks.all(groupId); }
+function addGroupLink(groupId, name, url, sort)  { return stmtAddGroupLink.run(groupId, name, url, sort || 0); }
+function updateGroupLink(id, name, url, sort)    { return stmtUpdateGroupLink.run(name, url, sort || 0, id); }
+function deleteGroupLink(id)                     { return stmtDeleteGroupLink.run(id); }
+function updateGroupLinkSort(id, sort)           { return stmtUpdateGroupLinkSort.run(sort, id); }
 
 // ── settings ─────────────────────────────────────────────────
 const stmtGetSetting = db.prepare('SELECT value FROM settings WHERE key = ?');
@@ -109,6 +157,8 @@ function deleteLink(key) { return stmtDeleteLink.run(key); }
 
 module.exports = {
   getSetting, setSetting,
+  getAllGroups, getGroupByKey, getGroupById, addGroup, updateGroup, deleteGroup,
+  getGroupLinks, addGroupLink, updateGroupLink, deleteGroupLink, updateGroupLinkSort,
   getAllCategories, addCategory, updateCategory, deleteCategory,
   getLink, getAllLinks, getAllLinksSorted, getLinksPage, countLinks,
   addLink, updateLink, updateLinkSorts, deleteLink,
