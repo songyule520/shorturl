@@ -149,6 +149,7 @@
   <div class="sidebar-logo">
     短链管理
     <a href="/" target="_blank">← 查看展示页</a>
+    <a href="#" onclick="logout()" style="margin-top:2px;color:#f87171">退出登录</a>
   </div>
   <div class="nav-item active" onclick="switchPage('links')" id="nav-links">
     <span class="nav-icon">🔗</span> 短链列表
@@ -285,6 +286,19 @@
           <button class="btn-primary" onclick="saveSettings()">保存设置</button>
         </div>
       </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">修改密码</div>
+      <div class="modal-field" style="margin-bottom:12px">
+        <label>原密码</label>
+        <input type="password" id="s-old-pwd" placeholder="输入原密码" style="width:280px" />
+      </div>
+      <div class="modal-field" style="margin-bottom:16px">
+        <label>新密码（至少 6 位）</label>
+        <input type="password" id="s-new-pwd" placeholder="输入新密码" style="width:280px" />
+      </div>
+      <button class="btn-primary" onclick="changePassword()">修改密码</button>
     </div>
   </div>
 </div>
@@ -810,6 +824,26 @@
     });
     if (!res.ok) return showMsg('保存失败', true);
     showMsg('设置已保存', false);
+  }
+
+  async function logout() {
+    await fetch('/auth/logout', { method: 'POST' });
+    window.location.href = '/login';
+  }
+
+  async function changePassword() {
+    const oldPassword = document.getElementById('s-old-pwd').value;
+    const newPassword = document.getElementById('s-new-pwd').value;
+    if (!oldPassword || !newPassword) return showMsg('请填写原密码和新密码', true);
+    const res = await fetch('/settings/password', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ oldPassword, newPassword }),
+    });
+    const data = await res.json();
+    if (!res.ok) return showMsg(data.error, true);
+    document.getElementById('s-old-pwd').value = '';
+    document.getElementById('s-new-pwd').value = '';
+    showMsg('密码已修改', false);
   }
 
   // init

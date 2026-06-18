@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
+const session = require('express-session');
 const {
   getSetting, setSetting,
   getAllGroups, getGroupByKey, getGroupById, addGroup, updateGroup, deleteGroup,
@@ -29,6 +30,52 @@ const upload = multer({
 
 const app = express();
 app.use(express.json());
+app.use(session({
+  secret: getSetting('session_secret', 'shorturl-secret-2024'),
+  resave: false,
+  saveUninitialized: false,
+  cookie: { maxAge: 7 * 24 * 60 * 60 * 1000 }, // 7天
+}));
+
+// 初始化默认账号密码
+if (!getSetting('admin_username')) setSetting('admin_username', 'admin');
+if (!getSetting('admin_password')) setSetting('admin_password', 'admin123');
+
+// 鉴权中间件
+function requireAuth(req, res, next) {
+  if (req.session && req.session.loggedIn) return next();
+  if (req.path.startsWith('/auth')) return next();
+  // API 请求返回 401
+  if (req.path.startsWith('/links') || req.path.startsWith('/categories') ||
+      req.path.startsWith('/groups') || req.path.startsWith('/settings')) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  return res.redirect('/login');
+}
+
+// 登录页
+app.get('/login', (req, res) => {
+  if (req.session && req.session.loggedIn) return res.redirect('/manage');
+  res.sendFile(path.join(__dirname, 'views', 'login.html'));
+});
+
+// 登录 API
+app.post('/auth/login', (req, res) => {
+  const { username, password } = req.body;
+  const storedUser = getSetting('admin_username', 'admin');
+  const storedPass = getSetting('admin_password', 'admin123');
+  if (username === storedUser && password === storedPass) {
+    req.session.loggedIn = true;
+    return res.json({ ok: true });
+  }
+  res.status(401).json({ error: '用户名或密码错误' });
+});
+
+// 登出 API
+app.post('/auth/logout', (req, res) => {
+  req.session.destroy();
+  res.json({ ok: true });
+});
 
 const router = express.Router();
 
@@ -37,7 +84,13 @@ app.use('/public', express.static(path.join(__dirname, 'public')));
 
 // Pages
 router.get('/',       (req, res) => res.sendFile(path.join(__dirname, 'views', 'index.html')));
-router.get('/manage', (req, res) => res.sendFile(path.join(__dirname, 'views', 'admin.html')));
+router.get('/manage', requireAuth, (req, res) => res.sendFile(path.join(__dirname, 'views', 'admin.html')));
+
+// 所有 API 需要登录
+router.use('/settings', requireAuth);
+router.use('/categories', requireAuth);
+router.use('/links', requireAuth);
+router.use('/groups', requireAuth);
 
 // ── Settings API ─────────────────────────────────────────────
 router.get('/settings', (req, res) => {
@@ -52,6 +105,16 @@ router.post('/settings', (req, res) => {
   const { title, subtitle } = req.body;
   if (title    !== undefined) setSetting('title',    title);
   if (subtitle !== undefined) setSetting('subtitle', subtitle);
+  res.json({ ok: true });
+});
+
+router.post('/settings/password', (req, res) => {
+  const { oldPassword, newPassword } = req.body;
+  if (!oldPassword || !newPassword) return res.status(400).json({ error: '请填写原密码和新密码' });
+  const stored = getSetting('admin_password', 'admin123');
+  if (oldPassword !== stored) return res.status(401).json({ error: '原密码错误' });
+  if (newPassword.length < 6) return res.status(400).json({ error: '新密码至少 6 位' });
+  setSetting('admin_password', newPassword);
   res.json({ ok: true });
 });
 
