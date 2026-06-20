@@ -86,11 +86,13 @@ app.use('/public', express.static(path.join(__dirname, 'public')));
 router.get('/',       (req, res) => res.sendFile(path.join(__dirname, 'views', 'index.html')));
 router.get('/manage', requireAuth, (req, res) => res.sendFile(path.join(__dirname, 'views', 'admin.html')));
 
-// 所有 API 需要登录
-router.use('/settings', requireAuth);
-router.use('/categories', requireAuth);
-router.use('/links', requireAuth);
-router.use('/groups', requireAuth);
+// 只有写操作需要登录（GET 接口公开，供展示页使用）
+router.use((req, res, next) => {
+  if (req.method === 'GET') return next();
+  const writePaths = ['/settings', '/categories', '/links', '/groups'];
+  if (writePaths.some(p => req.path.startsWith(p))) return requireAuth(req, res, next);
+  next();
+});
 
 // ── Settings API ─────────────────────────────────────────────
 router.get('/settings', (req, res) => {
